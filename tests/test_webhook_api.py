@@ -151,6 +151,32 @@ class WebhookApiTests(unittest.TestCase):
         self.assertEqual(response.json(), {"received": True, "duplicate": False})
         self.assertEqual(self._event_count(), 0)
 
+    def test_one_time_payment_link_completion_is_acknowledged_without_subscription_persistence(self) -> None:
+        event = {
+            "id": "evt_tip",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_test_tip",
+                    "client_reference_id": None,
+                    "customer": None,
+                    "subscription": None,
+                    "payment_link": "plink_test_tip",
+                    "payment_status": "paid",
+                }
+            },
+        }
+        client = self._client(FakeWebhookGateway(event))
+
+        response = self._post(client)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"received": True, "duplicate": False, "ignored": True},
+        )
+        self.assertEqual(self._event_count(), 0)
+
     def _seed_checkout(self) -> None:
         self.store.create_checkout("checkout-ref")
         self.store.attach_session("checkout-ref", "cs_test_123")

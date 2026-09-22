@@ -113,6 +113,35 @@ eval(fs.readFileSync('site/app.js', 'utf8'));
     return json.loads(result.stdout)
 
 
+def run_configured_payment_page() -> dict[str, dict[str, str | bool | None]]:
+    script = """
+const fs = require('fs');
+const ids = ['customServicePaymentLinkUrl', 'tipPaymentLinkUrl', 'customerPortalUrl'];
+const elements = Object.fromEntries(ids.map((id) => [id, {
+  href: 'unset', attributes: {}, title: '',
+  removeAttribute(name) { if (name === 'href') this.href = null; else delete this.attributes[name]; },
+  setAttribute(name, value) { this.attributes[name] = value; },
+}]));
+elements['configuration-status'] = {
+  hidden: true, textContent: '', attributes: {},
+  removeAttribute() {}, setAttribute(name, value) { this.attributes[name] = value; },
+};
+global.window = { location: { search: '' } };
+global.document = { getElementById: (id) => elements[id] || null };
+eval(fs.readFileSync('site/config.js', 'utf8'));
+eval(fs.readFileSync('site/app.js', 'utf8'));
+console.log(JSON.stringify(elements));
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
+
+
 def compose_config() -> dict[str, object]:
     compose_path = ROOT / "compose.yaml"
     if not compose_path.is_file():
@@ -152,6 +181,17 @@ class PaymentPageTests(unittest.TestCase):
         self.assertEqual(actions["customerPortalUrl"]["href"], "https://billing.stripe.com/p/login/test_123")
         self.assertNotIn("aria-disabled", actions["tipPaymentLinkUrl"]["attributes"])
 
+    def test_deployed_tip_configuration_enables_the_sandbox_payment_link(self) -> None:
+        actions = run_configured_payment_page()
+
+        self.assertEqual(
+            actions["tipPaymentLinkUrl"]["href"],
+            "https://buy.stripe.com/test_6oUdRa1kze4J15M4sQ4wM00",
+        )
+        self.assertNotIn(
+            "aria-disabled", actions["tipPaymentLinkUrl"]["attributes"]
+        )
+
     def test_invalid_or_empty_url_is_disabled(self) -> None:
         actions = run_browser(
             {
@@ -185,6 +225,23 @@ class PaymentPageTests(unittest.TestCase):
         self.assertEqual(
             status["textContent"],
             "Subscription checkout completed. Your payment is being confirmed.",
+        )
+
+    def test_tip_success_return_has_tip_specific_confirmation(self) -> None:
+        actions = run_browser(
+            {
+                "customServicePaymentLinkUrl": "",
+                "tipPaymentLinkUrl": "https://buy.stripe.com/test_tip",
+                "customerPortalUrl": "",
+            },
+            "?checkout=tip-success",
+        )
+
+        status = actions["configuration-status"]
+        self.assertFalse(status["hidden"])
+        self.assertEqual(
+            status["textContent"],
+            "Thank you for your tip. Stripe has confirmed your checkout.",
         )
 
     def test_tickerpulse_checkout_posts_once_and_redirects_to_stripe(self) -> None:

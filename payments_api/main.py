@@ -92,6 +92,17 @@ def create_app(
         try:
             data = _required_mapping(event.get("data"))
             checkout = _required_mapping(data.get("object"))
+            if checkout.get("subscription") is None and isinstance(
+                checkout.get("payment_link"), str
+            ):
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "received": True,
+                        "duplicate": False,
+                        "ignored": True,
+                    },
+                )
             completion = CheckoutCompletion(
                 event_id=_required_string(event_id),
                 event_type="checkout.session.completed",

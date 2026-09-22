@@ -16,6 +16,9 @@ manual fulfillment.
 - Checkout creation: `POST /api/checkout-sessions`
 - Stripe webhook: `POST /api/stripe/webhook`
 - Completion event: `checkout.session.completed`
+- Tip Product: `prod_VJAuMeMaOB1xOn`
+- Tip variable USD Price: `price_1UIYYcJMVS0qQfgEKTxbyYg0`
+- Tip Payment Link: `plink_1UIYZ2JMVS0qQfgEftCM4ssO`
 
 The browser asks the FastAPI service for a fresh subscription Checkout Session,
 then redirects only to `https://checkout.stripe.com`. The service enables Managed
@@ -28,8 +31,13 @@ Stripe hosts all payment fields. The supplied publishable key is not used by thi
 hosted Checkout flow. Keep secret and restricted keys server-side.
 Live mode is out of scope; this repository and its defaults are sandbox-only.
 
-Custom Service, Tip, and customer-portal buttons remain separate Payment Link
-work. This slice does not make those offerings available.
+The Tip action uses a separate sandbox Payment Link where the customer chooses
+a one-time USD amount from $1.00 through $500.00, with $5.00 suggested. It uses
+standard Stripe Payments with dynamic payment methods and does not enable
+Managed Payments because no eligible digital product is delivered for a tip.
+Tip completions are acknowledged by the shared webhook but do not create a
+subscription record or trigger fulfillment. Custom Service and customer-portal
+buttons remain separate work and are not available.
 
 ## Architecture and safety
 

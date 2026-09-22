@@ -98,6 +98,10 @@ function configureCheckoutReturn(document, window) {
     status.textContent =
       "Subscription checkout completed. Your payment is being confirmed.";
     status.hidden = false;
+  } else if (outcome === "tip-success") {
+    status.textContent =
+      "Thank you for your tip. Stripe has confirmed your checkout.";
+    status.hidden = false;
   } else if (outcome === "cancelled") {
     status.textContent = "Checkout was cancelled. No payment was made.";
     status.hidden = false;
