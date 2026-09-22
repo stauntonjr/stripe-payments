@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: ^secrets/store/.*\.sops$
+    age: age1nefzzzzx83cle92hnmydpwvdcc9gzvzhaulzq7huangzr4m4jywqdq032u

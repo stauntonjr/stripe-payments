@@ -1,0 +1,19 @@
+# Plaintext credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+keys.txt
+*.dec
+*.decrypted
+*.plain
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+# Dependencies and build output
+node_modules/
+dist/
+.venv/
