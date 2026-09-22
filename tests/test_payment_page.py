@@ -343,3 +343,31 @@ class PaymentPageTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("rk_test_example", result.stderr)
         self.assertNotIn("whsec_example", result.stderr)
+
+    def test_readme_documents_managed_payments_operation(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        for required in (
+            "prod_VJ8HawUafhUacx",
+            "price_1UIW1FJMVS0qQfgEkAA4kLPY",
+            "POST /api/checkout-sessions",
+            "POST /api/stripe/webhook",
+            "checkout.session.completed",
+            "payments_data",
+            "scripts/secrets/edit.sh .env",
+            "restricted key",
+            "Managed Payments",
+            "publishable key is not used",
+            "Live mode is out of scope",
+        ):
+            self.assertIn(required, readme)
+
+    def test_secrets_guide_documents_sandbox_runtime_values(self) -> None:
+        guide = (ROOT / "secrets/README.md").read_text(encoding="utf-8")
+        for required in (
+            "STRIPE_SECRET_KEY",
+            "STRIPE_WEBHOOK_SECRET",
+            "scripts/secrets/check.sh",
+            "mode 600",
+            "restricted sandbox key",
+        ):
+            self.assertIn(required, guide)

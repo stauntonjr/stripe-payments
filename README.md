@@ -1,115 +1,131 @@
 # stripe-payments
 
-Public repository for exploring Stripe one-time payments, subscriptions, and tips.
+Sandbox Stripe Checkout service for the public payment page at
+`https://pay.ediacarian.dedyn.io`.
 
-## Status
+## Current integration
 
-Repository and SOPS/age secrets workflow are set up. No payment application,
-Stripe account configuration, products, prices, webhook endpoint, or deployment
-has been created yet. The encrypted environment file contains empty placeholders,
-not real credentials. No live payments can be collected by this repository yet.
+TickerPulse is a fully automated digital subscription: customers customize news
+feeds and consume them through RSS or a Telegram bot. There is no consulting or
+manual fulfillment.
 
-## Intended first integration
+- Stripe account: `acct_1UIUebJMVS0qQfgE` (sandbox/test mode)
+- Product: `prod_VJ8HawUafhUacx`
+- Monthly USD $1.00 Price: `price_1UIW1FJMVS0qQfgEkAA4kLPY`
+- Product tax code: `txcd_10103000`
+- Checkout creation: `POST /api/checkout-sessions`
+- Stripe webhook: `POST /api/stripe/webhook`
+- Completion event: `checkout.session.completed`
 
-Use Stripe-hosted Payment Links for three website actions:
+The browser asks the FastAPI service for a fresh subscription Checkout Session,
+then redirects only to `https://checkout.stripe.com`. The service enables Managed
+Payments, uses the existing Price, and sends the blueprint-required
+`2026-02-25.preview` API version on that request. It persists the checkout
+reference, Session ID, Customer ID, and Subscription ID in SQLite. Webhook
+signatures are verified before state changes and duplicate events are idempotent.
 
-- **Pay:** a fixed-price, one-time purchase.
-- **Subscribe:** a recurring plan with a customer portal link to manage billing.
-- **Leave a tip:** a one-time, customer-chosen amount.
+Stripe hosts all payment fields. The supplied publishable key is not used by this
+hosted Checkout flow. Keep secret and restricted keys server-side.
+Live mode is out of scope; this repository and its defaults are sandbox-only.
 
-Public Payment Link URLs can be committed as ordinary website configuration.
-They do not require a secret API key. If a later integration unlocks paid content,
-use server-side verified payment/subscription events, not a browser redirect, to
-control access. Keep API keys and webhook signing secrets on the server.
+Custom Service, Tip, and customer-portal buttons remain separate Payment Link
+work. This slice does not make those offerings available.
 
-Start in Stripe test mode. Live-mode activation and deployment are separate steps.
-Subscription checkout should show the amount and billing interval clearly and
-provide an accessible cancellation route.
+## Architecture and safety
 
-## Test-mode payment page
+The `pay-page` Nginx container serves the static site. The `payments-api`
+container runs FastAPI as an unprivileged user with a read-only root filesystem,
+no host port, and a private health check. Traefik sends only `/api` requests to
+FastAPI; all other paths remain on the static site. SQLite is stored in the named
+`payments_data` volume at `/data/stripe-payments.sqlite3`.
 
-The static payment directory is designed for
-`https://pay.ediacarian.dedyn.io`. It redirects visitors to Stripe-hosted
-Checkout; it does not accept card details, create Checkout Sessions, or contain
-Stripe credentials.
+Use a restricted sandbox key for `STRIPE_SECRET_KEY`, initially granting Checkout
+Sessions write access and expanding it only if Stripe reports a specific required
+permission. Do not use a live key or commit any plaintext credential.
 
-Before publishing the page, use the Stripe Dashboard in **test mode** to create
-these three Products, Prices, and Payment Links:
+## Configure encrypted sandbox secrets
 
-- **TickerPulse:** a USD $1.00 recurring monthly price.
-- **Custom Service:** a one-time USD price with customer-adjustable amount
-  enabled.
-- **Tip:** a separate one-time USD price with customer-adjustable amount
-  enabled.
-
-Also enable Stripe Billing customer-portal login and subscription cancellation.
-Copy the four public URLs into `site/config.js`; none is a secret:
-
-| Dashboard value | `site/config.js` key |
-| --- | --- |
-| `TICKERPULSE_PAYMENT_LINK_URL` | `tickerPulsePaymentLinkUrl` |
-| `CUSTOM_SERVICE_PAYMENT_LINK_URL` | `customServicePaymentLinkUrl` |
-| `TIP_PAYMENT_LINK_URL` | `tipPaymentLinkUrl` |
-| `STRIPE_CUSTOMER_PORTAL_URL` | `customerPortalUrl` |
-
-Use only HTTPS `https://buy.stripe.com/...` test Payment Links and an HTTPS
-`https://billing.stripe.com/...` customer-portal login URL. Keep any missing
-value as an empty string; the page disables that action rather than sending the
-visitor to an unsafe destination.
-
-On the VPS, deploy the committed checkout from its dedicated directory:
+The repository uses SOPS/age and maps the ignored `.env` file through
+`secrets/manifest.tsv`. With the age private key available locally, edit the
+encrypted payload without printing values:
 
 ```sh
-docker compose -p stripe-payments up -d
-docker compose -p stripe-payments ps
-docker compose -p stripe-payments logs --tail=100 pay-page
-curl -fsSI https://pay.ediacarian.dedyn.io/
-```
-
-The service has no host port. The existing Traefik edge provides the public
-HTTPS route. Before calling a release ready, verify normal TLS validation and
-exercise the TickerPulse subscription, Custom Service amount entry, Tip amount
-entry, and subscription-portal login in Stripe test mode.
-
-Live-mode links, Stripe credentials, webhooks, payment-gated entitlements, and
-deployment of live payment changes are outside this release.
-
-## Secrets setup
-
-This follows the dotfiles SOPS/age convention: `.sops.yaml`, a manifest,
-`secrets/store/**/*.sops`, and local helper scripts. Only the public age recipient
-is reused; no dotfiles credentials or private keys were copied.
-
-On macOS, install prerequisites if needed:
-
-```sh
-brew install sops age
-```
-
-The existing age private key must be available locally at
-`~/.config/sops/age/keys.txt`, or through `SOPS_AGE_KEY_FILE` / `SOPS_AGE_KEY`.
-Never add that private key to this repository. See [secrets instructions](secrets/README.md).
-
-```sh
-# Verify decryption without leaving plaintext behind
-bash scripts/secrets/check.sh
-
-# Restore ignored .env with mode 600
-bash scripts/secrets/decrypt-all.sh
-
-# Edit locally and re-encrypt
 EDITOR=nano bash scripts/secrets/edit.sh .env
-
-# Or encrypt after editing .env yourself
-bash scripts/secrets/encrypt-all.sh
 ```
 
-Review and commit the encrypted file after changes. The edit/decrypt commands
-leave `.env` locally; it is ignored by Git. Delete it when no longer needed.
+Set `STRIPE_SECRET_KEY` to the restricted sandbox key and
+`STRIPE_WEBHOOK_SECRET` to the sandbox endpoint's signing secret. Retain the
+non-secret defaults from `.env.example`. Then verify the encrypted round trip and
+that restored `.env` permissions are mode 600:
+
+```sh
+bash scripts/secrets/check.sh
+bash scripts/secrets/decrypt-all.sh
+stat -c '%a %n' .env
+```
+
+If the webhook destination has not been created yet, use a non-secret temporary
+sentinel for `STRIPE_WEBHOOK_SECRET` only for the initial health deployment. Once
+the HTTPS endpoint is healthy, create the destination, replace the sentinel with
+the real signing secret through `scripts/secrets/edit.sh .env`, and recreate the
+API container before testing payment completion.
+
+## Verify and deploy on the VPS
+
+Run the local verification gates:
+
+```sh
+.venv/bin/python -m unittest discover -s tests -v
+docker compose config --quiet
+docker build -f Dockerfile.api -t stripe-payments-api:test .
+bash scripts/secrets/check.sh
+git diff --check
+```
+
+Deploy the sandbox services from this repository's VPS checkout:
+
+```sh
+bash scripts/secrets/decrypt-all.sh
+docker compose -p stripe-payments up -d --build
+docker compose -p stripe-payments ps
+docker compose -p stripe-payments logs --tail=100 payments-api pay-page
+curl -fsSI https://pay.ediacarian.dedyn.io/
+curl -fsS https://pay.ediacarian.dedyn.io/api/not-found
+```
+
+The first URL must return the static page with normal TLS validation. The second
+should return FastAPI's JSON 404, demonstrating that `/api` reaches the API
+router. `docker compose ps` must show the API container as healthy; `/healthz` is
+container-internal and intentionally not exposed by Traefik.
+
+After the public API is healthy, create a sandbox webhook destination for:
+
+```text
+https://pay.ediacarian.dedyn.io/api/stripe/webhook
+```
+
+Subscribe it to `checkout.session.completed`, securely store its `whsec_...`
+value as described above, and recreate `payments-api`.
+
+## Sandbox acceptance
+
+1. Open the public page and choose TickerPulse Subscribe.
+2. Confirm Stripe Checkout displays USD $1.00 per month and Managed Payments.
+3. Complete Checkout with a Stripe-published sandbox payment method and try
+   different billing addresses when checking tax behavior.
+4. Confirm the webhook receives HTTP 200.
+5. Inspect the SQLite record without displaying credentials and verify it is
+   `completed` with Session, Customer, and Subscription IDs.
+6. Replay the same signed event and verify it remains a single stored event and
+   returns HTTP 200 as a duplicate.
+
+A browser success redirect alone is not fulfillment evidence. The signed
+`checkout.session.completed` event is the completion signal. Do not activate
+live mode or deploy live credentials without a separate explicit authorization.
 
 ## References
 
-- [Stripe Payment Links](https://docs.stripe.com/payment-links)
-- [Stripe customer portal](https://docs.stripe.com/customer-management)
+- [Stripe Checkout](https://docs.stripe.com/payments/checkout)
+- [Stripe test cards](https://docs.stripe.com/testing)
 - [Stripe webhook signatures](https://docs.stripe.com/webhooks/signature)
 - [SOPS](https://github.com/getsops/sops)
