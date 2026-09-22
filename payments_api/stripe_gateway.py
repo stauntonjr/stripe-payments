@@ -51,11 +51,19 @@ class StripeGateway:
         return HostedCheckout(session_id=session_id, url=url)
 
     def construct_event(self, payload: bytes, signature: str) -> Mapping[str, object]:
-        return stripe.Webhook.construct_event(
+        event = stripe.Webhook.construct_event(
             payload,
             signature,
             self._settings.stripe_webhook_secret,
         )
+        if isinstance(event, Mapping):
+            return event
+        to_dict = getattr(event, "to_dict", None)
+        if callable(to_dict):
+            normalized = to_dict()
+            if isinstance(normalized, Mapping):
+                return normalized
+        raise InvalidStripeResponse("Stripe returned an invalid webhook event")
 
 
 def _field(value: Any, name: str) -> str:

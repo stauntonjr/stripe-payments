@@ -4,6 +4,8 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
+import stripe
+
 from payments_api.config import Settings
 from payments_api.stripe_gateway import StripeGateway
 
@@ -54,6 +56,40 @@ class StripeGatewayTests(unittest.TestCase):
         )
         self.assertNotIn("payment_method_types", params)
         self.assertNotIn("automatic_tax", params)
+
+    def test_verified_sdk_event_is_normalized_to_plain_mappings(self) -> None:
+        sdk_event = stripe.Event.construct_from(
+            {
+                "id": "evt_test_123",
+                "type": "checkout.session.completed",
+                "data": {"object": {"id": "cs_test_123"}},
+            },
+            "rk_test_example",
+        )
+        with patch(
+            "payments_api.stripe_gateway.stripe.Webhook.construct_event",
+            return_value=sdk_event,
+        ):
+            gateway = StripeGateway(self._settings())
+
+            event = gateway.construct_event(b"{}", "t=123,v1=signature")
+
+        self.assertIsInstance(event, dict)
+        self.assertEqual(event.get("type"), "checkout.session.completed")
+        self.assertIsInstance(event.get("data"), dict)
+
+    @staticmethod
+    def _settings() -> Settings:
+        return Settings.from_mapping(
+            {
+                "STRIPE_SECRET_KEY": "rk_test_example",
+                "STRIPE_WEBHOOK_SECRET": "whsec_example",
+                "STRIPE_TICKERPULSE_PRICE_ID": "price_1UIW1FJMVS0qQfgEkAA4kLPY",
+                "STRIPE_INTEGRATION_IDENTIFIER": "tickerpulse_fastapi_qzrmhptk",
+                "CHECKOUT_BASE_URL": "https://pay.ediacarian.dedyn.io",
+                "SQLITE_PATH": ":memory:",
+            }
+        )
 
 
 if __name__ == "__main__":

@@ -89,6 +89,21 @@ function configureTickerPulseCheckout(document, window) {
   });
 }
 
+function configureCheckoutReturn(document, window) {
+  const status = document.getElementById("configuration-status");
+  if (!status) return;
+
+  const outcome = new URLSearchParams(window.location.search || "").get("checkout");
+  if (outcome === "success") {
+    status.textContent =
+      "Subscription checkout completed. Your payment is being confirmed.";
+    status.hidden = false;
+  } else if (outcome === "cancelled") {
+    status.textContent = "Checkout was cancelled. No payment was made.";
+    status.hidden = false;
+  }
+}
+
 // accepted: https://buy.stripe.com/test_123
 // accepted: https://billing.stripe.com/p/login/test_123
 // rejected: http://buy.stripe.com/test_123
@@ -96,3 +111,4 @@ function configureTickerPulseCheckout(document, window) {
 // rejected: javascript:alert(1)
 configurePaymentPage(document, window.PAYMENT_PAGE_CONFIG);
 configureTickerPulseCheckout(document, window);
+configureCheckoutReturn(document, window);

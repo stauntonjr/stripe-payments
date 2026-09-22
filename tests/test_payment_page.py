@@ -12,7 +12,9 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def run_browser(config: dict[str, str]) -> dict[str, dict[str, str | None]]:
+def run_browser(
+    config: dict[str, str], search: str = ""
+) -> dict[str, dict[str, str | bool | None]]:
     """Execute the page script against a minimal browser-like document."""
     app_path = ROOT / "site/app.js"
     if not app_path.is_file():
@@ -25,13 +27,17 @@ const elements = Object.fromEntries(Object.keys(config).map((id) => [id, {
   removeAttribute(name) { if (name === 'href') this.href = null; else delete this.attributes[name]; },
   setAttribute(name, value) { this.attributes[name] = value; },
 }]));
-global.window = { PAYMENT_PAGE_CONFIG: config };
+elements['configuration-status'] = {
+  hidden: true, textContent: 'Checkout links are being configured. Please return shortly.',
+  attributes: {}, removeAttribute() {}, setAttribute(name, value) { this.attributes[name] = value; },
+};
+global.window = { PAYMENT_PAGE_CONFIG: config, location: { search: process.argv[2] } };
 global.document = { getElementById: (id) => elements[id] || null };
 eval(fs.readFileSync('site/app.js', 'utf8'));
 console.log(JSON.stringify(elements));
 """
     result = subprocess.run(
-        ["node", "-e", script, json.dumps(config)],
+        ["node", "-e", script, json.dumps(config), search],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -154,10 +160,32 @@ class PaymentPageTests(unittest.TestCase):
                 "customerPortalUrl": "https://example.test/portal",
             }
         )
-        for action in actions.values():
+        for action_id in (
+            "customServicePaymentLinkUrl",
+            "tipPaymentLinkUrl",
+            "customerPortalUrl",
+        ):
+            action = actions[action_id]
             self.assertIsNone(action["href"])
             self.assertEqual(action["attributes"].get("aria-disabled"), "true")
             self.assertEqual(action["title"], "This Stripe test checkout has not been configured yet.")
+
+    def test_success_return_overrides_unrelated_configuration_notice(self) -> None:
+        actions = run_browser(
+            {
+                "customServicePaymentLinkUrl": "",
+                "tipPaymentLinkUrl": "",
+                "customerPortalUrl": "",
+            },
+            "?checkout=success&session_id=cs_test_123",
+        )
+
+        status = actions["configuration-status"]
+        self.assertFalse(status["hidden"])
+        self.assertEqual(
+            status["textContent"],
+            "Subscription checkout completed. Your payment is being confirmed.",
+        )
 
     def test_tickerpulse_checkout_posts_once_and_redirects_to_stripe(self) -> None:
         result = run_checkout(
