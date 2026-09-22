@@ -101,6 +101,14 @@ class CheckoutApiTests(unittest.TestCase):
         assert record is not None
         self.assertEqual(record.state, "creation_failed")
 
+    def test_health_check_confirms_database_readiness(self) -> None:
+        client = self._client(FakeStripeGateway())
+
+        response = client.get("/healthz")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
     def _client(self, gateway: FakeStripeGateway) -> TestClient:
         settings = Settings.from_mapping(
             {

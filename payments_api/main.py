@@ -36,6 +36,12 @@ def create_app(
 ) -> FastAPI:
     app = FastAPI(title="TickerPulse payments", docs_url=None, redoc_url=None)
 
+    @app.get("/healthz")
+    def health_check() -> JSONResponse:
+        if not store.is_ready():
+            return JSONResponse(status_code=503, content={"status": "unavailable"})
+        return JSONResponse(status_code=200, content={"status": "ok"})
+
     @app.post("/api/checkout-sessions")
     def create_checkout_session() -> JSONResponse:
         reference = uuid.uuid4().hex

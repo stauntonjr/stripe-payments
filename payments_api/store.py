@@ -65,6 +65,13 @@ class CheckoutStore:
         except sqlite3.OperationalError as error:
             raise OSError(f"Cannot initialize SQLite database: {self._path}") from error
 
+    def is_ready(self) -> bool:
+        try:
+            with self._connect() as connection:
+                return connection.execute("SELECT 1").fetchone() is not None
+        except sqlite3.Error:
+            return False
+
     def create_checkout(self, reference: str) -> None:
         now = _now()
         with self._connect() as connection:

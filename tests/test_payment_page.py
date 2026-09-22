@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
+import tempfile
 import unittest
 
 
@@ -244,3 +247,99 @@ class PaymentPageTests(unittest.TestCase):
             labels["traefik.http.middlewares.pay-page-security.headers.framedeny"],
             "true",
         )
+
+    def test_compose_adds_isolated_persistent_fastapi_service(self) -> None:
+        config = compose_config()
+        service = config["services"]["payments-api"]
+        self.assertEqual(service["build"]["dockerfile"], "Dockerfile.api")
+        self.assertNotIn("ports", service)
+        self.assertEqual(list(service["networks"]), ["traefik_public"])
+        self.assertTrue(service["read_only"])
+        self.assertIn("healthcheck", service)
+        self.assertEqual(
+            service["environment"]["SQLITE_PATH"],
+            "/data/stripe-payments.sqlite3",
+        )
+        self.assertTrue(
+            any(
+                volume["source"] == "payments_data"
+                and volume["target"] == "/data"
+                for volume in service["volumes"]
+            )
+        )
+        self.assertIn("payments_data", config["volumes"])
+        compose_source = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+        self.assertIn("env_file:\n      - path: .env\n        required: false", compose_source)
+
+    def test_fastapi_route_precedes_static_route_and_reuses_security_headers(self) -> None:
+        services = compose_config()["services"]
+        labels = services["payments-api"]["labels"]
+        static_labels = services["pay-page"]["labels"]
+        self.assertEqual(
+            labels["traefik.http.routers.payments-api.rule"],
+            "Host(`pay.ediacarian.dedyn.io`) && PathPrefix(`/api`)",
+        )
+        self.assertGreater(
+            int(labels["traefik.http.routers.payments-api.priority"]),
+            int(static_labels.get("traefik.http.routers.pay-page.priority", "0")),
+        )
+        self.assertEqual(
+            labels["traefik.http.services.payments-api.loadbalancer.server.port"],
+            "8000",
+        )
+        self.assertEqual(
+            labels["traefik.http.routers.payments-api.middlewares"],
+            "pay-page-security",
+        )
+
+    def test_docker_build_context_excludes_credentials_and_local_state(self) -> None:
+        ignored = {
+            line.strip()
+            for line in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")
+        }
+        for pattern in (
+            ".env",
+            "secrets/",
+            ".git/",
+            "*.sqlite3",
+            "__pycache__/",
+            ".specstory/",
+        ):
+            self.assertIn(pattern, ignored)
+
+    def test_environment_example_contains_only_non_secret_defaults(self) -> None:
+        example = (ROOT / ".env.example").read_text(encoding="utf-8")
+        for line in (
+            "STRIPE_SECRET_KEY=",
+            "STRIPE_WEBHOOK_SECRET=",
+            "STRIPE_TICKERPULSE_PRICE_ID=price_1UIW1FJMVS0qQfgEkAA4kLPY",
+            "STRIPE_INTEGRATION_IDENTIFIER=tickerpulse_fastapi_qzrmhptk",
+            "CHECKOUT_BASE_URL=https://pay.ediacarian.dedyn.io",
+            "SQLITE_PATH=/data/stripe-payments.sqlite3",
+        ):
+            self.assertIn(line, example)
+        for secret_prefix in ("sk_test_", "rk_test_", "whsec_"):
+            self.assertNotIn(secret_prefix, example)
+
+    def test_runtime_fails_closed_when_database_parent_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            environment = {
+                **os.environ,
+                "STRIPE_SECRET_KEY": "rk_test_example",
+                "STRIPE_WEBHOOK_SECRET": "whsec_example",
+                "STRIPE_TICKERPULSE_PRICE_ID": "price_1UIW1FJMVS0qQfgEkAA4kLPY",
+                "STRIPE_INTEGRATION_IDENTIFIER": "tickerpulse_fastapi_qzrmhptk",
+                "CHECKOUT_BASE_URL": "https://pay.ediacarian.dedyn.io",
+                "SQLITE_PATH": str(Path(tempdir) / "missing" / "payments.sqlite3"),
+            }
+            result = subprocess.run(
+                [sys.executable, "-c", "import payments_api.runtime"],
+                cwd=ROOT,
+                env=environment,
+                capture_output=True,
+                text=True,
+            )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("rk_test_example", result.stderr)
+        self.assertNotIn("whsec_example", result.stderr)

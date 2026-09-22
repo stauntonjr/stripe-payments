@@ -1,4 +1,44 @@
 services:
+  payments-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      STRIPE_TICKERPULSE_PRICE_ID: ${STRIPE_TICKERPULSE_PRICE_ID:-price_1UIW1FJMVS0qQfgEkAA4kLPY}
+      STRIPE_INTEGRATION_IDENTIFIER: ${STRIPE_INTEGRATION_IDENTIFIER:-tickerpulse_fastapi_qzrmhptk}
+      CHECKOUT_BASE_URL: ${CHECKOUT_BASE_URL:-https://pay.ediacarian.dedyn.io}
+      SQLITE_PATH: /data/stripe-payments.sqlite3
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - payments_data:/data
+    networks:
+      - traefik_public
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: vps-srv_traefik_public
+      traefik.http.routers.payments-api.rule: 'Host(`pay.ediacarian.dedyn.io`) && PathPrefix(`/api`)'
+      traefik.http.routers.payments-api.entrypoints: websecure
+      traefik.http.routers.payments-api.tls: "true"
+      traefik.http.routers.payments-api.tls.certresolver: desecresolver
+      traefik.http.routers.payments-api.priority: "200"
+      traefik.http.routers.payments-api.middlewares: pay-page-security
+      traefik.http.services.payments-api.loadbalancer.server.port: "8000"
+
   pay-page:
     image: nginxinc/nginx-unprivileged:1.27-alpine
     restart: unless-stopped
@@ -31,3 +71,6 @@ networks:
   traefik_public:
     name: vps-srv_traefik_public
     external: true
+
+volumes:
+  payments_data:
