@@ -41,7 +41,8 @@ class StripeGateway:
                 "client_reference_id": checkout_reference,
                 "metadata": {"product": "tickerpulse", "environment": "sandbox"},
                 "integration_identifier": self._settings.integration_identifier,
-            }
+            },
+            options={"stripe_version": "2026-02-25.preview"},
         )
         session_id = _field(session, "id")
         url = _field(session, "url")
