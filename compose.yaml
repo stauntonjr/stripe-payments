@@ -1,0 +1,33 @@
+services:
+  pay-page:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+      - /var/run
+    volumes:
+      - ./site:/usr/share/nginx/html:ro
+    networks:
+      - traefik_public
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: vps-srv_traefik_public
+      traefik.http.routers.pay-page.rule: 'Host(`pay.ediacarian.dedyn.io`)'
+      traefik.http.routers.pay-page.entrypoints: websecure
+      traefik.http.routers.pay-page.tls: "true"
+      traefik.http.routers.pay-page.tls.certresolver: desecresolver
+      traefik.http.routers.pay-page.middlewares: pay-page-security
+      traefik.http.services.pay-page.loadbalancer.server.port: "8080"
+      traefik.http.middlewares.pay-page-security.headers.contenttypenosniff: "true"
+      traefik.http.middlewares.pay-page-security.headers.framedeny: "true"
+      traefik.http.middlewares.pay-page-security.headers.referrerpolicy: strict-origin-when-cross-origin
+      traefik.http.middlewares.pay-page-security.headers.stsseconds: "63072000"
+      traefik.http.middlewares.pay-page-security.headers.stsincludesubdomains: "true"
+      traefik.http.middlewares.pay-page-security.headers.stspreload: "true"
+
+networks:
+  traefik_public:
+    name: vps-srv_traefik_public
+    external: true

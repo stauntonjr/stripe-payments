@@ -37,6 +37,20 @@ console.log(JSON.stringify(elements));
     return json.loads(result.stdout)
 
 
+def compose_config() -> dict[str, object]:
+    compose_path = ROOT / "compose.yaml"
+    if not compose_path.is_file():
+        raise AssertionError(f"missing Compose configuration: {compose_path}")
+    result = subprocess.run(
+        ["docker", "compose", "config", "--format", "json"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
+
+
 class PaymentPageTests(unittest.TestCase):
     def test_page_has_requested_offerings(self) -> None:
         page_path = ROOT / "site/index.html"
@@ -84,3 +98,37 @@ class PaymentPageTests(unittest.TestCase):
         page = page_path.read_text(encoding="utf-8")
         self.assertNotIn('type="number"', page)
         self.assertNotIn('name="amount"', page)
+
+    def test_compose_keeps_payment_page_off_host_ports(self) -> None:
+        config = compose_config()
+        service = config["services"]["pay-page"]
+        self.assertNotIn("ports", service)
+        self.assertEqual(list(service["networks"]), ["traefik_public"])
+        self.assertTrue(config["networks"]["traefik_public"]["external"])
+        self.assertEqual(
+            config["networks"]["traefik_public"]["name"],
+            "vps-srv_traefik_public",
+        )
+
+    def test_compose_route_is_scoped_and_hardened(self) -> None:
+        labels = compose_config()["services"]["pay-page"]["labels"]
+        self.assertEqual(
+            labels["traefik.http.routers.pay-page.rule"],
+            "Host(`pay.ediacarian.dedyn.io`)",
+        )
+        self.assertEqual(
+            labels["traefik.http.routers.pay-page.tls.certresolver"],
+            "desecresolver",
+        )
+        self.assertEqual(
+            labels["traefik.http.services.pay-page.loadbalancer.server.port"],
+            "8080",
+        )
+        self.assertEqual(
+            labels["traefik.http.routers.pay-page.middlewares"],
+            "pay-page-security",
+        )
+        self.assertEqual(
+            labels["traefik.http.middlewares.pay-page-security.headers.framedeny"],
+            "true",
+        )
