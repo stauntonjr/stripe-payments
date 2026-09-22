@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -47,6 +48,13 @@ class StripeGateway:
         if not _is_allowed_checkout_url(url):
             raise InvalidStripeResponse("Stripe returned an unsafe Checkout URL")
         return HostedCheckout(session_id=session_id, url=url)
+
+    def construct_event(self, payload: bytes, signature: str) -> Mapping[str, object]:
+        return stripe.Webhook.construct_event(
+            payload,
+            signature,
+            self._settings.stripe_webhook_secret,
+        )
 
 
 def _field(value: Any, name: str) -> str:
