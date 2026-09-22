@@ -26,6 +26,54 @@ Start in Stripe test mode. Live-mode activation and deployment are separate step
 Subscription checkout should show the amount and billing interval clearly and
 provide an accessible cancellation route.
 
+## Test-mode payment page
+
+The static payment directory is designed for
+`https://pay.ediacarian.dedyn.io`. It redirects visitors to Stripe-hosted
+Checkout; it does not accept card details, create Checkout Sessions, or contain
+Stripe credentials.
+
+Before publishing the page, use the Stripe Dashboard in **test mode** to create
+these three Products, Prices, and Payment Links:
+
+- **TickerPulse:** a USD $1.00 recurring monthly price.
+- **Custom Service:** a one-time USD price with customer-adjustable amount
+  enabled.
+- **Tip:** a separate one-time USD price with customer-adjustable amount
+  enabled.
+
+Also enable Stripe Billing customer-portal login and subscription cancellation.
+Copy the four public URLs into `site/config.js`; none is a secret:
+
+| Dashboard value | `site/config.js` key |
+| --- | --- |
+| `TICKERPULSE_PAYMENT_LINK_URL` | `tickerPulsePaymentLinkUrl` |
+| `CUSTOM_SERVICE_PAYMENT_LINK_URL` | `customServicePaymentLinkUrl` |
+| `TIP_PAYMENT_LINK_URL` | `tipPaymentLinkUrl` |
+| `STRIPE_CUSTOMER_PORTAL_URL` | `customerPortalUrl` |
+
+Use only HTTPS `https://buy.stripe.com/...` test Payment Links and an HTTPS
+`https://billing.stripe.com/...` customer-portal login URL. Keep any missing
+value as an empty string; the page disables that action rather than sending the
+visitor to an unsafe destination.
+
+On the VPS, deploy the committed checkout from its dedicated directory:
+
+```sh
+docker compose -p stripe-payments up -d
+docker compose -p stripe-payments ps
+docker compose -p stripe-payments logs --tail=100 pay-page
+curl -fsSI https://pay.ediacarian.dedyn.io/
+```
+
+The service has no host port. The existing Traefik edge provides the public
+HTTPS route. Before calling a release ready, verify normal TLS validation and
+exercise the TickerPulse subscription, Custom Service amount entry, Tip amount
+entry, and subscription-portal login in Stripe test mode.
+
+Live-mode links, Stripe credentials, webhooks, payment-gated entitlements, and
+deployment of live payment changes are outside this release.
+
 ## Secrets setup
 
 This follows the dotfiles SOPS/age convention: `.sops.yaml`, a manifest,
