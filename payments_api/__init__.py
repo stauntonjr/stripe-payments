@@ -1,0 +1,1 @@
+"""TickerPulse Managed Payments service."""
