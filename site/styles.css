@@ -29,11 +29,15 @@ p { line-height: 1.55; }
 
 .price { color: #fef08a; font-size: 1.5rem; font-weight: 700; margin: .25rem 0; }
 
-.button { background: #38bdf8; border-radius: .5rem; color: #0f172a; font-weight: 700; margin-top: auto; padding: .75rem 1rem; text-align: center; text-decoration: none; }
+.button { background: #38bdf8; border: 0; border-radius: .5rem; color: #0f172a; cursor: pointer; font: inherit; font-weight: 700; margin-top: auto; padding: .75rem 1rem; text-align: center; text-decoration: none; }
 
-a:not([aria-disabled="true"]):focus-visible { outline: .2rem solid #fef08a; outline-offset: .2rem; }
+a:not([aria-disabled="true"]):focus-visible, button:focus-visible { outline: .2rem solid #fef08a; outline-offset: .2rem; }
 
 a[aria-disabled="true"] { cursor: not-allowed; opacity: .55; }
+
+button:disabled { cursor: wait; opacity: .7; }
+
+.checkout-error { color: #fecaca; font-size: .9rem; margin: .75rem 0 0; }
 
 .notice { background: #78350f; border-radius: .5rem; padding: 1rem; }
 

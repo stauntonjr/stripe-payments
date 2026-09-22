@@ -35,9 +35,64 @@ function configurePaymentPage(document, config) {
   }
 }
 
+function isAllowedCheckoutUrl(value) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname === "checkout.stripe.com" &&
+      url.username === "" &&
+      url.password === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
+function setTickerPulseBusy(button, error, busy) {
+  button.disabled = busy;
+  if (busy) {
+    button.setAttribute("aria-busy", "true");
+    error.hidden = true;
+    error.textContent = "";
+  } else {
+    button.removeAttribute("aria-busy");
+  }
+}
+
+function configureTickerPulseCheckout(document, window) {
+  const button = document.getElementById("tickerPulseCheckoutButton");
+  const error = document.getElementById("tickerPulseCheckoutError");
+  if (!button || !error) return;
+
+  button.addEventListener("click", async () => {
+    setTickerPulseBusy(button, error, true);
+    let redirecting = false;
+    try {
+      const response = await fetch("/api/checkout-sessions", {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error("checkout request failed");
+      const payload = await response.json();
+      if (!isAllowedCheckoutUrl(payload.checkout_url)) {
+        throw new Error("unsafe checkout destination");
+      }
+      window.location.assign(payload.checkout_url);
+      redirecting = true;
+    } catch {
+      error.textContent = "Checkout is temporarily unavailable. Please try again.";
+      error.hidden = false;
+    } finally {
+      if (!redirecting) setTickerPulseBusy(button, error, false);
+    }
+  });
+}
+
 // accepted: https://buy.stripe.com/test_123
 // accepted: https://billing.stripe.com/p/login/test_123
 // rejected: http://buy.stripe.com/test_123
 // rejected: https://example.test/checkout
 // rejected: javascript:alert(1)
 configurePaymentPage(document, window.PAYMENT_PAGE_CONFIG);
+configureTickerPulseCheckout(document, window);
