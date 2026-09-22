@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Stripe test-mode checkout options for TickerPulse, Custom Service, and tips.">
+    <title>Payments | Ediacarian</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="config.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Ediacarian payments</p>
+        <h1>Choose how you’d like to support the work.</h1>
+        <p>This page uses Stripe-hosted test checkout. Payment details are collected by Stripe.</p>
+      </header>
+
+      <p id="configuration-status" class="notice" role="status" hidden>
+        Checkout links are being configured. Please return shortly.
+      </p>
+
+      <section class="offers" aria-label="Payment options">
+        <article class="offer featured">
+          <p class="eyebrow">TickerPulse</p>
+          <h2>Keep the pulse</h2>
+          <p class="price">$1.00/month</p>
+          <p>A simple monthly subscription for TickerPulse.</p>
+          <a id="tickerPulsePaymentLinkUrl" class="button" aria-disabled="true">Subscribe</a>
+        </article>
+
+        <article class="offer">
+          <p class="eyebrow">Custom Service</p>
+          <h2>Choose your amount</h2>
+          <p>Stripe will ask for a one-time amount in USD at checkout.</p>
+          <a id="customServicePaymentLinkUrl" class="button" aria-disabled="true">Choose amount</a>
+        </article>
+
+        <article class="offer">
+          <p class="eyebrow">Tip</p>
+          <h2>Say thanks</h2>
+          <p>Stripe will ask for a one-time tip amount in USD at checkout.</p>
+          <a id="tipPaymentLinkUrl" class="button" aria-disabled="true">Leave a tip</a>
+        </article>
+      </section>
+
+      <p class="manage">
+        Already subscribed?
+        <a id="customerPortalUrl" aria-disabled="true">Manage TickerPulse subscription</a>
+      </p>
+    </main>
+  </body>
+</html>
